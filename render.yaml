@@ -24,7 +24,6 @@ services:
   - type: web
     name: crm-frontend
     env: static
-    plan: free
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: "./frontend/dist"
     envVars:
