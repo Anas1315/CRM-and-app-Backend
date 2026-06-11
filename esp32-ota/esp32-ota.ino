@@ -69,9 +69,6 @@ const long otaInterval = 60000;
 unsigned long previousTelemetryMillis = 0;
 const long telemetryInterval = 15000;
 
-unsigned long previousTimePrintMillis = 0;
-const long timePrintInterval = 10000;
-
 // ============================================================
 //  NVS CONFIG HELPERS
 // ============================================================
@@ -164,16 +161,6 @@ String getFormattedTime() {
   sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", now.year(), now.month(),
           now.day(), now.hour(), now.minute(), now.second());
   return String(buf);
-}
-
-void printCurrentTime() {
-  if (!rtcPresent)
-    return;
-  DateTime now = rtc.now();
-  float temp = rtc.getTemperature();
-  Serial.printf("[RTC] %04d-%02d-%02d %02d:%02d:%02d | Temp: %.1f C\n",
-                now.year(), now.month(), now.day(), now.hour(), now.minute(),
-                now.second(), temp);
 }
 
 void syncRTCWithNTP() {
@@ -369,8 +356,6 @@ void sendTelemetryAndGetControls() {
 
   Serial.print("\n[Telemetry] Sending to: ");
   Serial.println(url);
-  Serial.print("[Telemetry] Payload: ");
-  Serial.println(jsonStr);
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
@@ -378,8 +363,6 @@ void sendTelemetryAndGetControls() {
 
   if (httpCode == 200) {
     String response = http.getString();
-    Serial.print("[Telemetry] Response: ");
-    Serial.println(response);
 
     DynamicJsonDocument respDoc(512);
     DeserializationError error = deserializeJson(respDoc, response);
@@ -390,13 +373,13 @@ void sendTelemetryAndGetControls() {
       serverHeavyLoadState = respDoc["heavyLoadState"] | true;
       serverDayStart = respDoc["dayStart"] | String("08:00");
       serverDayEnd = respDoc["dayEnd"] | String("18:00");
-      Serial.println("[Telemetry] Sync successful!");
+      Serial.println("[Telemetry] Sync OK");
     } else {
-      Serial.print("[Telemetry] JSON Deserialization error: ");
+      Serial.print("[Telemetry] JSON error: ");
       Serial.println(error.c_str());
     }
   } else {
-    Serial.println("[Telemetry] Post failed, HTTP code: " + String(httpCode));
+    Serial.println("[Telemetry] Failed, HTTP: " + String(httpCode));
   }
   http.end();
 }
@@ -424,9 +407,6 @@ const char AP_HTML[] PROGMEM = R"rawliteral(
          background:linear-gradient(135deg,#2563eb,#38bdf8);color:#fff;
          font-size:16px;font-weight:700;cursor:pointer;margin-top:8px}
   button:hover{opacity:.9}
-  .uid{background:#0f172a;border-radius:10px;padding:10px 14px;text-align:center;
-       font-family:monospace;font-size:14px;color:#38bdf8;margin-bottom:16px;
-       border:1px solid #334155}
   .info{font-size:11px;color:#64748b;text-align:center;margin-top:16px}
 </style>
 </head><body>
@@ -439,9 +419,9 @@ const char AP_HTML[] PROGMEM = R"rawliteral(
     <label>WiFi Password</label>
     <input name="pass" type="password" placeholder="Enter WiFi password" required>
     <label>Device UID (from mobile app)</label>
-    <input name="device_uid" placeholder="e.g. SOLAR-7F3C2A9B" value="%DEVICE_UID%">
+    <input name="device_uid" placeholder="e.g. SKU-WHL-0001" value="%DEVICE_UID%">
     <label>Backend Server URL</label>
-    <input name="server_url" placeholder="e.g. http://192.168.100.68:5000" value="%SERVER_URL%" required>
+    <input name="server_url" placeholder="https://crm-backend-ukfa.onrender.com" value="%SERVER_URL%" required>
     <button type="submit">Save & Connect</button>
   </form>
   <p class="info">After saving, the ESP32 will restart and connect to your WiFi.</p>
@@ -596,7 +576,6 @@ void setup() {
   // WiFi connected — sync RTC and set up normal operation
   if (rtcPresent) {
     syncRTCWithNTP();
-    printCurrentTime();
   }
 
   // Normal STA-mode WebServer endpoints
@@ -611,13 +590,6 @@ void setup() {
                   WiFi.localIP().toString() + "\",\"device_uid\":\"" +
                   deviceUid + "\",\"api_base_url\":\"" + apiBaseUrl + "\"}";
     server.send(200, "application/json", json);
-  });
-
-  server.on("/version/reset", HTTP_GET, []() {
-    saveVersion("0.0.0");
-    server.send(200, "text/plain", "Version reset. Restarting...");
-    delay(500);
-    ESP.restart();
   });
 
   server.on("/configure", HTTP_GET, []() {
@@ -686,12 +658,6 @@ void setup() {
     }
   });
 
-  server.on("/rtc-status", HTTP_GET, []() {
-    server.send(200, "application/json",
-                "{\"rtc_present\":" + String(rtcPresent ? "true" : "false") +
-                    "}");
-  });
-
   server.begin();
   Serial.println("[HTTP] WebServer started on port 80");
 
@@ -731,12 +697,6 @@ void loop() {
   if (now - previousTelemetryMillis >= telemetryInterval) {
     previousTelemetryMillis = now;
     sendTelemetryAndGetControls();
-  }
-
-  // Print time every 10s
-  if (rtcPresent && (now - previousTimePrintMillis >= timePrintInterval)) {
-    previousTimePrintMillis = now;
-    printCurrentTime();
   }
 
   // OTA check every 60s
