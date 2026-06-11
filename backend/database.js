@@ -1,11 +1,17 @@
 const bcrypt = require("bcryptjs");
 const path = require("path");
-const sqlite3 = require("sqlite3").verbose();
-const { Pool } = require("pg");
 
 require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
 const usePostgres = !!process.env.DATABASE_URL;
+
+// Conditionally load database drivers to avoid native compilation issues
+let sqlite3, Pool;
+if (usePostgres) {
+  Pool = require("pg").Pool;
+} else {
+  sqlite3 = require("sqlite3").verbose();
+}
 let sqliteDb = null;
 let pgPool = null;
 
