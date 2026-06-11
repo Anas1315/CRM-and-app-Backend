@@ -399,7 +399,7 @@ const initializeDatabase = (async () => {
 
   await ensureTableColumn('firmware', 'product_family', "VARCHAR(10) DEFAULT 'WHL'");
 
-  console.log(\`[Database] \${usePostgres ? 'PostgreSQL' : 'SQLite'} schema ensured\`);
+  console.log("[Database] " + (usePostgres ? "PostgreSQL" : "SQLite") + " schema ensured");
 })();
 
 module.exports = {
