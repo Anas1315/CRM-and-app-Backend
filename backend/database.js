@@ -131,7 +131,6 @@ function initPostgres() {
   return new Promise((resolve, reject) => {
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }, // Render requires SSL
     });
     pool.connect((err, client, release) => {
       if (err) {
