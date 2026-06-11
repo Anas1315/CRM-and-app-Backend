@@ -1,6 +1,6 @@
 const database = require("../database");
 const { get, run, query } = database;
-const isSQLite = true;
+const isSQLite = !process.env.DATABASE_URL;
 
 // ============================================================
 // CRM SALES & DASHBOARD
@@ -203,16 +203,17 @@ async function getDashboardStats(req, res) {
     );
     const totalSales = parseInt(salesCountRow.count);
 
-    // 3. Total Flutter app users (real data from the shared local database)
+    // 3. Total Flutter app users
     const appUserRow = await get(
       `SELECT COUNT(*) AS count FROM users WHERE role = 'user'`,
     );
     const totalAppUsers = parseInt(appUserRow.count);
 
-
     // 5. Deactivated app users
     const deactivatedRow = await get(
-      `SELECT COUNT(*) AS count FROM users WHERE role = 'user' AND is_active = 0`,
+      isSQLite
+        ? `SELECT COUNT(*) AS count FROM users WHERE role = 'user' AND is_active = 0`
+        : `SELECT COUNT(*) AS count FROM users WHERE role = 'user' AND is_active = FALSE`,
     );
     const deactivatedUsers = parseInt(deactivatedRow.count);
 
@@ -224,7 +225,9 @@ async function getDashboardStats(req, res) {
 
     // 7. Active firmware version
     const firmwareRow = await get(
-      `SELECT version FROM firmware WHERE is_active = 1 LIMIT 1`,
+      isSQLite
+        ? `SELECT version FROM firmware WHERE is_active = 1 LIMIT 1`
+        : `SELECT version FROM firmware WHERE is_active = TRUE LIMIT 1`,
     );
     const activeFirmware = firmwareRow
       ? firmwareRow.version
@@ -243,37 +246,37 @@ async function getDashboardStats(req, res) {
     );
     const recentSales = recentSalesResult.rows;
 
+    // 9. Sales trend (last 5 months)
     const trendRowsResult = await query(
-      `SELECT strftime('%Y-%m', sale_date) AS month_key, COALESCE(SUM(amount), 0) AS sales
-       FROM sales
-       WHERE status = 'completed'
-         AND sale_date >= datetime('now', '-5 months')
-       GROUP BY month_key
-       ORDER BY month_key ASC`,
+      isSQLite
+        ? `SELECT strftime('%Y-%m', sale_date) AS month_key, COALESCE(SUM(amount), 0) AS sales
+           FROM sales
+           WHERE status = 'completed'
+             AND sale_date >= datetime('now', '-5 months')
+           GROUP BY month_key
+           ORDER BY month_key ASC`
+        : `SELECT
+             TO_CHAR(DATE_TRUNC('month', sale_date), 'YYYY-MM') AS month_key,
+             COALESCE(SUM(amount), 0) AS sales
+           FROM sales
+           WHERE status = 'completed'
+             AND sale_date >= NOW() - INTERVAL '5 months'
+           GROUP BY DATE_TRUNC('month', sale_date)
+           ORDER BY DATE_TRUNC('month', sale_date) ASC`,
     );
     const trendRows = trendRowsResult.rows;
 
     // Fill in any missing months with 0
     const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
     const now = new Date();
     const salesTrend = [];
     for (let i = 4; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mon = months[d.getMonth()];
-      const expectedMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const expectedMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
       const found = trendRows.find((r) => String(r.month_key).trim() === expectedMonth);
       salesTrend.push({
         month: mon,
@@ -305,7 +308,7 @@ async function getDashboardStats(req, res) {
     for (let i = 4; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mon = months[d.getMonth()];
-      const expectedMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const expectedMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
       const found = userGrowthRows.find(
         (r) => String(r.month_key).trim() === expectedMonth,
       );
