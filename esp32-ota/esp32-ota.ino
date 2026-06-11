@@ -17,9 +17,9 @@
 // ========================
 // OTA & Telemetry API Configuration
 // ========================
-// ESP32 must use the backend PC's LAN IP, not localhost.
-// Change this if your computer gets a different WiFi IP.
-const char *defaultApiBaseUrl = "http://192.168.100.68:5000";
+// Production cloud backend (Render). ESP32 can reach this from any WiFi.
+// Can be overridden per-device via the AP provisioning portal.
+const char *defaultApiBaseUrl = "https://crm-backend-ukfa.onrender.com";
 String apiBaseUrl = defaultApiBaseUrl;
 String deviceUid = ""; // Dynamically loaded from NVS or MAC address
 

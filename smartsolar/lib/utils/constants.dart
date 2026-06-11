@@ -4,7 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class Constants {
   // ─── API Configuration ───────────────────────────────────────
-  // Your backend server's LAN IP. This is the default for physical devices.
+  // Production cloud backend (Render)
+  static const String productionBaseUrl = 'https://crm-backend-ukfa.onrender.com';
+  // Local development fallbacks
   static const String lanBaseUrl = 'http://172.23.200.125:5000';
   static const String localDevBaseUrl = 'http://localhost:5000';
   static const String androidEmulatorBaseUrl = 'http://10.0.2.2:5000';
@@ -39,7 +41,7 @@ class Constants {
   }
 
   /// Detect and set the best base URL on app startup.
-  /// Priority: saved preference → emulator probe → LAN probe → LAN fallback.
+  /// Priority: saved preference → local probe → production cloud.
   static Future<void> initBaseUrl() async {
     // 1. Compile-time override wins
     if (configuredBaseUrl.isNotEmpty) return;
@@ -57,14 +59,18 @@ class Constants {
       return;
     }
 
-    // 3. Web platform — use localhost
-    if (kIsWeb) return;
+    // 3. Web platform — use production cloud
+    if (kIsWeb) {
+      _dynamicBaseUrl = productionBaseUrl;
+      return;
+    }
 
-    // 4. Android — probe reachable servers (works in BOTH debug & release)
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    // 4. Android / iOS — probe local servers first, then fall back to cloud
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
       final client = http.Client();
       try {
-        // 4a. Try emulator loopback first (only works on emulator)
+        // 4a. Try emulator loopback first (only works on emulator in debug)
         if (kDebugMode) {
           try {
             final response = await client
@@ -77,7 +83,7 @@ class Constants {
           } catch (_) {}
         }
 
-        // 4b. Try LAN IP (works on physical device)
+        // 4b. Try LAN IP (works on physical device on same network)
         try {
           final response = await client
               .get(Uri.parse('$lanBaseUrl/api/status'))
@@ -91,9 +97,8 @@ class Constants {
         client.close();
       }
 
-      // 4c. Even if probe failed, default to LAN IP so requests at least
-      //     go to the right address (server might just be starting up).
-      _dynamicBaseUrl = lanBaseUrl;
+      // 4c. No local server found — use production cloud backend
+      _dynamicBaseUrl = productionBaseUrl;
     }
   }
 
@@ -106,12 +111,8 @@ class Constants {
     if (_dynamicBaseUrl != null && _dynamicBaseUrl!.trim().isNotEmpty) {
       return _dynamicBaseUrl!;
     }
-    // Web fallback
-    if (kIsWeb) {
-      return localDevBaseUrl;
-    }
-    // Final fallback: always use the LAN IP so physical devices work
-    return lanBaseUrl;
+    // Final fallback: always use the production cloud backend
+    return productionBaseUrl;
   }
 
   static const Map<String, String> headers = {
