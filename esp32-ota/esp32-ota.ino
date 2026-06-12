@@ -12,6 +12,7 @@
 #include <RTClib.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <Wire.h>
 
 // ========================
@@ -227,8 +228,12 @@ void checkForOTAUpdate() {
 
   Serial.println("[OTA] New firmware: " + latestVersion);
   saveVersion(latestVersion);
-  WiFiClient client;
+  
+  WiFiClientSecure client;
+  client.setInsecure();
+  httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   httpUpdate.rebootOnUpdate(true);
+  
   t_httpUpdate_return ret = httpUpdate.update(client, firmwareUrl);
 
   switch (ret) {
@@ -380,10 +385,10 @@ void sendTelemetryAndGetControls() {
     DynamicJsonDocument respDoc(512);
     DeserializationError error = deserializeJson(respDoc, response);
     if (!error) {
-      serverWapdaAutoMode = respDoc["wapdaAutoMode"] | true;
-      serverWapdaRelayState = respDoc["wapdaRelayState"] | true;
-      serverHeavyLoadAutoMode = respDoc["heavyLoadAutoMode"] | true;
-      serverHeavyLoadState = respDoc["heavyLoadState"] | true;
+      serverWapdaAutoMode = respDoc.containsKey("wapdaAutoMode") ? respDoc["wapdaAutoMode"].as<bool>() : true;
+      serverWapdaRelayState = respDoc.containsKey("wapdaRelayState") ? respDoc["wapdaRelayState"].as<bool>() : true;
+      serverHeavyLoadAutoMode = respDoc.containsKey("heavyLoadAutoMode") ? respDoc["heavyLoadAutoMode"].as<bool>() : true;
+      serverHeavyLoadState = respDoc.containsKey("heavyLoadState") ? respDoc["heavyLoadState"].as<bool>() : true;
       serverDayStart = respDoc["dayStart"] | String("08:00");
       serverDayEnd = respDoc["dayEnd"] | String("18:00");
       Serial.println("[Telemetry] Sync OK");
