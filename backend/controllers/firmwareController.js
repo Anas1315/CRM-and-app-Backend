@@ -5,21 +5,12 @@ const fs = require('fs');
 const uploadsDir = path.resolve(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
-// ── Semantic version comparison ──────────────────────────────
-// Returns true if serverVer is strictly newer than deviceVer
-// e.g. compareVersions('1.0.1', '1.0.2') → true
+// Returns true if serverVer is DIFFERENT from deviceVer
+// This allows both upgrades and downgrades/rollbacks to the active firmware
 function compareVersions(deviceVer, serverVer) {
-  const normalize = v => v.trim().replace(/^v/i, '').split('.').map(Number);
-  const d = normalize(deviceVer);
-  const s = normalize(serverVer);
-  const len = Math.max(d.length, s.length);
-  for (let i = 0; i < len; i++) {
-    const dPart = d[i] || 0;
-    const sPart = s[i] || 0;
-    if (sPart > dPart) return true;   // server is newer
-    if (sPart < dPart) return false;  // device is somehow ahead
-  }
-  return false; // same version
+  const d = deviceVer.trim().toLowerCase();
+  const s = serverVer.trim().toLowerCase();
+  return d !== s;
 }
 
 /**
