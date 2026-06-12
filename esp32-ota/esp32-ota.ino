@@ -154,52 +154,29 @@ void initRTC() {
   }
 }
 
-bool getLocalTimeInfo(struct tm &timeinfo) {
-  if (rtcPresent) {
-    DateTime now = rtc.now();
-    timeinfo.tm_year = now.year() - 1900;
-    timeinfo.tm_mon = now.month() - 1;
-    timeinfo.tm_mday = now.day();
-    timeinfo.tm_hour = now.hour();
-    timeinfo.tm_min = now.minute();
-    timeinfo.tm_sec = now.second();
-    return true;
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    return getLocalTime(&timeinfo, 1000);
-  }
-  return false;
-}
-
 String getFormattedTime() {
-  struct tm timeinfo;
-  if (getLocalTimeInfo(timeinfo)) {
-    char buf[25];
-    sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d",
-            timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-            timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-    return String(buf);
-  }
-  return "NO_TIME";
+  if (!rtcPresent)
+    return "RTC_NOT_AVAILABLE";
+  DateTime now = rtc.now();
+  char buf[25];
+  sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", now.year(), now.month(),
+          now.day(), now.hour(), now.minute(), now.second());
+  return String(buf);
 }
 
-void syncTime() {
-  if (WiFi.status() != WL_CONNECTED)
+void syncRTCWithNTP() {
+  if (!rtcPresent || WiFi.status() != WL_CONNECTED)
     return;
-  Serial.println("[Time] Syncing with NTP...");
+  Serial.println("[RTC] Syncing with NTP...");
   configTime(18000, 0, "pool.ntp.org", "time.nist.gov"); // UTC+5 (Pakistan)
   struct tm timeinfo;
   if (getLocalTime(&timeinfo, 10000)) {
-    if (rtcPresent) {
-      rtc.adjust(DateTime(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1,
-                          timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min,
-                          timeinfo.tm_sec));
-      Serial.println("[RTC] Synced: " + getFormattedTime());
-    } else {
-      Serial.println("[Time] NTP Synced: " + getFormattedTime());
-    }
+    rtc.adjust(DateTime(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1,
+                        timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min,
+                        timeinfo.tm_sec));
+    Serial.println("[RTC] Synced: " + getFormattedTime());
   } else {
-    Serial.println("[Time] NTP sync failed");
+    Serial.println("[RTC] NTP sync failed");
   }
 }
 
@@ -355,17 +332,20 @@ void applyRelayControls() {
   bool pinRead = (digitalRead(WAPDA_SENSE_PIN) == LOW);
   bool wapdaAvailable = WAPDA_PRESENCE_ACTIVE_LOW ? pinRead : !pinRead;
 
-  struct tm timeinfo;
-  if (!getLocalTimeInfo(timeinfo)) {
-    // If no RTC and no NTP time (e.g. offline boot), default to Day time
+  if (!rtcPresent) {
     controlRelaysLogic(true, wapdaAvailable);
     return;
   }
 
+  DateTime now = rtc.now();
   int sH = 8, sM = 0, eH = 18, eM = 0;
   parseTimeStr(serverDayStart, sH, sM);
   parseTimeStr(serverDayEnd, eH, eM);
-  bool isDay = isTimeInDayRange(timeinfo.tm_hour, timeinfo.tm_min, sH, sM, eH, eM);
+  bool isDay = isTimeInDayRange(now.hour(), now.minute(), sH, sM, eH, eM);
+  
+  Serial.printf("[Scheduler] RTC Time: %02d:%02d | Range: %s to %s | Parsed: %02d:%02d - %02d:%02d | Day=%d\n",
+                now.hour(), now.minute(), serverDayStart.c_str(), serverDayEnd.c_str(), sH, sM, eH, eM, isDay);
+                
   controlRelaysLogic(isDay, wapdaAvailable);
 }
 
@@ -378,14 +358,14 @@ void sendTelemetryAndGetControls() {
   bool wapdaRelayState = (digitalRead(WAPDA_RELAY_PIN) == HIGH);
   bool heavyLoadState = (digitalRead(HEAVY_LOAD_RELAY_PIN) == HIGH);
 
-  // Compute isDayTime from RTC/NTP + user-defined schedule
-  bool isDayTime = true; // default
-  struct tm timeinfo;
-  if (getLocalTimeInfo(timeinfo)) {
+  // Compute isDayTime from RTC + user-defined schedule (NOT LDR)
+  bool isDayTime = true; // default if no RTC
+  if (rtcPresent) {
+    DateTime now = rtc.now();
     int sH = 8, sM = 0, eH = 18, eM = 0;
     parseTimeStr(serverDayStart, sH, sM);
     parseTimeStr(serverDayEnd, eH, eM);
-    isDayTime = isTimeInDayRange(timeinfo.tm_hour, timeinfo.tm_min, sH, sM, eH, eM);
+    isDayTime = isTimeInDayRange(now.hour(), now.minute(), sH, sM, eH, eM);
   }
 
   DynamicJsonDocument doc(256);
@@ -419,19 +399,9 @@ void sendTelemetryAndGetControls() {
       serverWapdaRelayState = respDoc.containsKey("wapdaRelayState") ? respDoc["wapdaRelayState"].as<bool>() : true;
       serverHeavyLoadAutoMode = respDoc.containsKey("heavyLoadAutoMode") ? respDoc["heavyLoadAutoMode"].as<bool>() : true;
       serverHeavyLoadState = respDoc.containsKey("heavyLoadState") ? respDoc["heavyLoadState"].as<bool>() : true;
-      if (respDoc.containsKey("dayStart")) {
-        serverDayStart = respDoc["dayStart"].as<String>();
-        nvsSetString("day_start", serverDayStart);
-      } else {
-        serverDayStart = "08:00";
-      }
-      if (respDoc.containsKey("dayEnd")) {
-        serverDayEnd = respDoc["dayEnd"].as<String>();
-        nvsSetString("day_end", serverDayEnd);
-      } else {
-        serverDayEnd = "18:00";
-      }
-      Serial.printf("[Telemetry] Sync OK. Schedule: %s to %s\n", serverDayStart.c_str(), serverDayEnd.c_str());
+      serverDayStart = respDoc["dayStart"] | String("08:00");
+      serverDayEnd = respDoc["dayEnd"] | String("18:00");
+      Serial.println("[Telemetry] Sync OK");
     } else {
       Serial.print("[Telemetry] JSON error: ");
       Serial.println(error.c_str());
@@ -617,10 +587,6 @@ void setup() {
 
   initRTC();
 
-  serverDayStart = nvsGetString("day_start", "08:00");
-  serverDayEnd = nvsGetString("day_end", "18:00");
-  Serial.printf("[System] Loaded schedule: %s to %s\n", serverDayStart.c_str(), serverDayEnd.c_str());
-
   String ver = getCurrentVersion();
   Serial.println("[System] Firmware version: " + ver);
 
@@ -633,8 +599,10 @@ void setup() {
     return; // AP mode runs in loop() via server.handleClient()
   }
 
-  // WiFi connected — sync time and set up normal operation
-  syncTime();
+  // WiFi connected — sync RTC and set up normal operation
+  if (rtcPresent) {
+    syncRTCWithNTP();
+  }
 
   // Normal STA-mode WebServer endpoints
   server.on("/update-check", HTTP_GET, []() {
@@ -679,16 +647,25 @@ void setup() {
   });
 
   server.on("/time", HTTP_GET, []() {
-    String t = getFormattedTime();
-    float temp = rtcPresent ? rtc.getTemperature() : 0.0;
-    String json = "{\"time\":\"" + t + "\",\"temperature\":" + String(temp) +
-                  ",\"rtc_present\":" + (rtcPresent ? "true" : "false") + "}";
-    server.send(200, "application/json", json);
+    if (rtcPresent) {
+      String t = getFormattedTime();
+      float temp = rtc.getTemperature();
+      String json = "{\"time\":\"" + t + "\",\"temperature\":" + String(temp) +
+                    ",\"rtc_present\":true}";
+      server.send(200, "application/json", json);
+    } else {
+      server.send(200, "application/json",
+                  "{\"error\":\"RTC not found\",\"rtc_present\":false}");
+    }
   });
 
   server.on("/sync-time", HTTP_GET, []() {
+    if (!rtcPresent) {
+      server.send(400, "application/json", "{\"error\":\"RTC not available\"}");
+      return;
+    }
     if (WiFi.status() == WL_CONNECTED) {
-      syncTime();
+      syncRTCWithNTP();
       server.send(200, "application/json",
                   "{\"status\":\"success\",\"time\":\"" + getFormattedTime() +
                       "\"}");
