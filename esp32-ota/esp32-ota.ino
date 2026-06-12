@@ -217,8 +217,10 @@ void checkForOTAUpdate() {
   }
 
   bool updateAvailable = doc["update_available"] | false;
-  String latestVersion = doc["latest_version"] | doc["version"] | String("");
-  String firmwareUrl = doc["firmware_url"] | doc["url"] | String("");
+  String latestVersion = doc["latest_version"].as<String>();
+  if (latestVersion.length() == 0) latestVersion = doc["version"].as<String>();
+  String firmwareUrl = doc["firmware_url"].as<String>();
+  if (firmwareUrl.length() == 0) firmwareUrl = doc["url"].as<String>();
 
   if (!updateAvailable) {
     Serial.println("[OTA] Up to date (" + currentVersion + ").");
@@ -399,8 +401,10 @@ void sendTelemetryAndGetControls() {
       serverWapdaRelayState = respDoc.containsKey("wapdaRelayState") ? respDoc["wapdaRelayState"].as<bool>() : true;
       serverHeavyLoadAutoMode = respDoc.containsKey("heavyLoadAutoMode") ? respDoc["heavyLoadAutoMode"].as<bool>() : true;
       serverHeavyLoadState = respDoc.containsKey("heavyLoadState") ? respDoc["heavyLoadState"].as<bool>() : true;
-      serverDayStart = respDoc["dayStart"] | String("08:00");
-      serverDayEnd = respDoc["dayEnd"] | String("18:00");
+      serverDayStart = respDoc["dayStart"].as<String>();
+      if (serverDayStart.length() == 0) serverDayStart = "08:00";
+      serverDayEnd = respDoc["dayEnd"].as<String>();
+      if (serverDayEnd.length() == 0) serverDayEnd = "18:00";
       Serial.println("[Telemetry] Sync OK");
     } else {
       Serial.print("[Telemetry] JSON error: ");
