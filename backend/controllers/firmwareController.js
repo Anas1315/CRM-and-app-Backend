@@ -160,7 +160,7 @@ async function otaCheck(req, res) {
     console.log(`[OTA] Update needed? ${updateNeeded}`);
 
     if (updateNeeded) {
-      const proto = req.protocol;
+      const proto = req.headers['x-forwarded-proto'] || req.protocol;
       const host  = req.get('host');
       const downloadUrl = `${proto}://${host}/api/firmware/ota/download?family=${family}`;
       console.log(`[OTA] Serving update → ${downloadUrl}`);
