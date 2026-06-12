@@ -267,12 +267,25 @@ bool isTimeInDayRange(int cH, int cM, int sH, int sM, int eH, int eM) {
 }
 
 void controlRelaysLogic(bool isDay, bool wapdaAvailable) {
-  bool finalWapda =
-      serverWapdaAutoMode ? wapdaAvailable : serverWapdaRelayState;
+  bool finalWapda = false;
   bool finalHeavyLoad = false;
 
+  if (serverWapdaAutoMode) {
+    if (isDay) {
+      finalWapda = false;
+    } else {
+      finalWapda = wapdaAvailable;
+    }
+  } else {
+    finalWapda = serverWapdaRelayState;
+  }
+
   if (serverHeavyLoadAutoMode) {
-    finalHeavyLoad = isDay || finalWapda;
+    if (isDay) {
+      finalHeavyLoad = true;
+    } else {
+      finalHeavyLoad = wapdaAvailable;
+    }
   } else {
     finalHeavyLoad = serverHeavyLoadState;
   }
@@ -420,8 +433,6 @@ const char AP_HTML[] PROGMEM = R"rawliteral(
     <input name="pass" type="password" placeholder="Enter WiFi password" required>
     <label>Device UID (from mobile app)</label>
     <input name="device_uid" placeholder="e.g. SKU-WHL-0001" value="%DEVICE_UID%">
-    <label>Backend Server URL</label>
-    <input name="server_url" placeholder="https://crm-backend-ukfa.onrender.com" value="%SERVER_URL%" required>
     <button type="submit">Save & Connect</button>
   </form>
   <p class="info">After saving, the ESP32 will restart and connect to your WiFi.</p>
@@ -447,8 +458,13 @@ void startAPMode() {
 
   server.on("/", HTTP_GET, []() {
     String html = String(AP_HTML);
-    html.replace("%DEVICE_UID%", deviceUid);
-    html.replace("%SERVER_URL%", apiBaseUrl);
+    String safeUid = deviceUid;
+    safeUid.replace("&", "&amp;");
+    safeUid.replace("<", "&lt;");
+    safeUid.replace(">", "&gt;");
+    safeUid.replace("\"", "&quot;");
+    safeUid.replace("'", "&#39;");
+    html.replace("%DEVICE_UID%", safeUid);
     server.send(200, "text/html", html);
   });
 
@@ -456,7 +472,6 @@ void startAPMode() {
     String ssid = server.arg("ssid");
     String pass = server.arg("pass");
     String uid = server.arg("device_uid");
-    String serverUrl = server.arg("server_url");
 
     if (ssid.length() == 0) {
       server.send(400, "text/plain", "SSID is required");
@@ -466,9 +481,6 @@ void startAPMode() {
     saveWiFiCreds(ssid, pass);
     if (uid.length() > 0) {
       saveDeviceUid(uid);
-    }
-    if (serverUrl.length() > 0) {
-      saveApiBaseUrl(normalizeApiBaseUrl(serverUrl));
     }
 
     server.send(
@@ -555,8 +567,7 @@ void setup() {
     Serial.println("[System] Loaded device_uid: " + deviceUid);
   }
 
-  apiBaseUrl =
-      normalizeApiBaseUrl(nvsGetString("api_base_url", defaultApiBaseUrl));
+  apiBaseUrl = defaultApiBaseUrl;
   Serial.println("[System] API base URL: " + apiBaseUrl);
 
   initRTC();
@@ -588,7 +599,7 @@ void setup() {
     String v = getCurrentVersion();
     String json = "{\"version\":\"" + v + "\",\"ip\":\"" +
                   WiFi.localIP().toString() + "\",\"device_uid\":\"" +
-                  deviceUid + "\",\"api_base_url\":\"" + apiBaseUrl + "\"}";
+                  deviceUid + "\"}";
     server.send(200, "application/json", json);
   });
 
@@ -603,21 +614,12 @@ void setup() {
         changed = true;
       }
     }
-    if (server.hasArg("server_url")) {
-      String newServerUrl = normalizeApiBaseUrl(server.arg("server_url"));
-      if (newServerUrl.length() > 0) {
-        saveApiBaseUrl(newServerUrl);
-        apiBaseUrl = newServerUrl;
-        changed = true;
-      }
-    }
     if (!changed) {
       server.send(400, "application/json",
-                  "{\"error\":\"Missing device_uid or server_url\"}");
+                  "{\"error\":\"Missing device_uid\"}");
       return;
     }
-    String json = "{\"status\":\"success\",\"device_uid\":\"" + deviceUid +
-                  "\",\"api_base_url\":\"" + apiBaseUrl + "\"}";
+    String json = "{\"status\":\"success\",\"device_uid\":\"" + deviceUid + "\"}";
     server.send(200, "application/json", json);
   });
 

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Constants {
@@ -41,7 +40,7 @@ class Constants {
   }
 
   /// Detect and set the best base URL on app startup.
-  /// Priority: saved preference → local probe → production cloud.
+  /// Priority: saved preference -> production cloud.
   static Future<void> initBaseUrl() async {
     // 1. Compile-time override wins
     if (configuredBaseUrl.isNotEmpty) return;
@@ -59,47 +58,8 @@ class Constants {
       return;
     }
 
-    // 3. Web platform — use production cloud
-    if (kIsWeb) {
-      _dynamicBaseUrl = productionBaseUrl;
-      return;
-    }
-
-    // 4. Android / iOS — probe local servers first, then fall back to cloud
-    if (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS) {
-      final client = http.Client();
-      try {
-        // 4a. Try emulator loopback first (only works on emulator in debug)
-        if (kDebugMode) {
-          try {
-            final response = await client
-                .get(Uri.parse('$androidEmulatorBaseUrl/api/status'))
-                .timeout(const Duration(milliseconds: 800));
-            if (response.statusCode == 200) {
-              _dynamicBaseUrl = androidEmulatorBaseUrl;
-              return;
-            }
-          } catch (_) {}
-        }
-
-        // 4b. Try LAN IP (works on physical device on same network)
-        try {
-          final response = await client
-              .get(Uri.parse('$lanBaseUrl/api/status'))
-              .timeout(const Duration(milliseconds: 1500));
-          if (response.statusCode == 200) {
-            _dynamicBaseUrl = lanBaseUrl;
-            return;
-          }
-        } catch (_) {}
-      } finally {
-        client.close();
-      }
-
-      // 4c. No local server found — use production cloud backend
-      _dynamicBaseUrl = productionBaseUrl;
-    }
+    // 3. Always default to production cloud backend
+    _dynamicBaseUrl = productionBaseUrl;
   }
 
   static String get baseUrl {

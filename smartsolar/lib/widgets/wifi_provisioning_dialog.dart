@@ -22,8 +22,7 @@ class _WifiProvisioningDialogState extends State<WifiProvisioningDialog> {
   final _formKey = GlobalKey<FormState>();
   final _ssidController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _uidController = TextEditingController();
-  final _serverUrlController = TextEditingController();
+    final _uidController = TextEditingController();
 
   @override
   void initState() {
@@ -38,8 +37,6 @@ class _WifiProvisioningDialogState extends State<WifiProvisioningDialog> {
     setState(() {
       _ssidController.text = prefs.getString('wifi_name') ?? '';
       _uidController.text = authProvider.user?.deviceId ?? '';
-      _serverUrlController.text =
-          prefs.getString('api_base_url') ?? Constants.baseUrl;
     });
   }
 
@@ -48,7 +45,6 @@ class _WifiProvisioningDialogState extends State<WifiProvisioningDialog> {
     _ssidController.dispose();
     _passwordController.dispose();
     _uidController.dispose();
-    _serverUrlController.dispose();
     super.dispose();
   }
 
@@ -64,11 +60,10 @@ class _WifiProvisioningDialogState extends State<WifiProvisioningDialog> {
     final ssid = Uri.encodeComponent(_ssidController.text.trim());
     final pass = Uri.encodeComponent(_passwordController.text.trim());
     final uid = Uri.encodeComponent(_uidController.text.trim());
-    final serverUrl = Uri.encodeComponent(_serverUrlController.text.trim());
 
     // ESP32 Provisioning Portal Endpoint
     final url =
-        'http://192.168.4.1/save-config?ssid=$ssid&pass=$pass&device_uid=$uid&server_url=$serverUrl';
+        'http://192.168.4.1/save-config?ssid=$ssid&pass=$pass&device_uid=$uid';
 
     try {
       final response = await http
@@ -79,8 +74,6 @@ class _WifiProvisioningDialogState extends State<WifiProvisioningDialog> {
         // Save the Wi-Fi name locally for convenience next time
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('wifi_name', _ssidController.text.trim());
-        await prefs.setString('api_base_url', _serverUrlController.text.trim());
-        Constants.setDynamicBaseUrl(_serverUrlController.text.trim());
 
         setState(() {
           _successMessage =
@@ -327,7 +320,7 @@ class _WifiProvisioningDialogState extends State<WifiProvisioningDialog> {
               ),
             ),
           Text(
-            'Step 2: Enter WiFi, Device Identity & Server',
+            'Step 2: Enter WiFi & Device Identity',
             style: TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.w700,
@@ -389,27 +382,7 @@ class _WifiProvisioningDialogState extends State<WifiProvisioningDialog> {
             validator: (v) =>
                 v == null || v.trim().isEmpty ? 'Enter Device UID' : null,
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _serverUrlController,
-            keyboardType: TextInputType.url,
-            decoration: InputDecoration(
-              labelText: 'Backend Server URL',
-              labelStyle: const TextStyle(fontSize: 13),
-              prefixIcon: const Icon(Icons.dns, size: 20),
-              hintText: 'http://192.168.100.68:5000',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
-            ),
-            validator: (v) => v == null || v.trim().isEmpty
-                ? 'Enter backend server URL'
-                : null,
-          ),
+
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

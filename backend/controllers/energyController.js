@@ -255,10 +255,17 @@ async function sendCommand(req, res) {
     // Update state based on command type and log the action
     if (type === "WAPDA_MODE") {
       const auto = value === 1;
-      await run(
-        `UPDATE device_controls SET wapda_auto_mode = $1 WHERE device_uid = $2`,
-        [auto, deviceId],
-      );
+      if (!auto) {
+        await run(
+          `UPDATE device_controls SET wapda_auto_mode = false, wapda_relay_state = COALESCE(wapda_relay_actual, wapda_relay_state) WHERE device_uid = $1`,
+          [deviceId],
+        );
+      } else {
+        await run(
+          `UPDATE device_controls SET wapda_auto_mode = true WHERE device_uid = $1`,
+          [deviceId],
+        );
+      }
       await helperLogEvent(
         "info",
         auto ? "Home WAPDA Auto Mode" : "Home WAPDA Manual Mode",
@@ -281,10 +288,17 @@ async function sendCommand(req, res) {
       );
     } else if (type === "HEAVY_LOAD_MODE") {
       const auto = value === 1;
-      await run(
-        `UPDATE device_controls SET heavy_load_auto_mode = $1 WHERE device_uid = $2`,
-        [auto, deviceId],
-      );
+      if (!auto) {
+        await run(
+          `UPDATE device_controls SET heavy_load_auto_mode = false, heavy_load_state = COALESCE(heavy_load_actual, heavy_load_state) WHERE device_uid = $1`,
+          [deviceId],
+        );
+      } else {
+        await run(
+          `UPDATE device_controls SET heavy_load_auto_mode = true WHERE device_uid = $1`,
+          [deviceId],
+        );
+      }
       await helperLogEvent(
         "info",
         auto ? "Heavy Load Auto Mode" : "Heavy Load Manual Mode",

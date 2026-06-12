@@ -57,7 +57,7 @@ class AuthService {
     }
   }
 
-  Future<UserModel?> signup(
+  Future<bool> signup(
     String name,
     String email,
     String productId,
@@ -65,16 +65,12 @@ class AuthService {
   ) async {
     try {
       final base = Constants.baseUrl;
-      print('[AuthService] Base URL: "$base"');
-      print('[AuthService] Configured Base URL: "${Constants.configuredBaseUrl}"');
-      print('[AuthService] Endpoint: "${Constants.endpointSignup}"');
-      print('[AuthService] Full constructed URL: "${base + Constants.endpointSignup}"');
       if (base.trim().isEmpty) {
         throw Exception('API base URL is not configured. Please set server URL in settings.');
       }
       final response = await http
           .post(
-            Uri.parse(base + Constants.endpointSignup),
+            Uri.parse('$base${Constants.endpointSignup}'),
             headers: Constants.headers,
             body: json.encode({
               'username': name,
@@ -86,10 +82,7 @@ class AuthService {
           .timeout(Constants.timeout);
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final user = UserModel.fromJson(_readUser(data), token: data['token']);
-        await _saveSession(user);
-        return user;
+        return true;
       } else {
         throw Exception(_readError(response.body, fallback: 'Signup failed'));
       }

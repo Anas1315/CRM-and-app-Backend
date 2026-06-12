@@ -12,6 +12,7 @@ import 'package:smartsolar/screens/controls_screen.dart';
 import 'package:smartsolar/screens/home_screen.dart';
 import 'package:smartsolar/screens/login_screen.dart';
 import 'package:smartsolar/screens/settings_screen.dart';
+import 'package:smartsolar/screens/splash_screen.dart';
 import 'package:smartsolar/screens/setup_screen.dart';
 import 'package:smartsolar/services/notification_service.dart';
 import 'package:smartsolar/utils/constants.dart';
@@ -32,10 +33,25 @@ void main() async {
   });
 }
 
-class SmartEnergyApp extends StatelessWidget {
+class SmartEnergyApp extends StatefulWidget {
   final bool autoConnect;
 
   const SmartEnergyApp({super.key, this.autoConnect = true});
+
+  @override
+  State<SmartEnergyApp> createState() => _SmartEnergyAppState();
+}
+
+class _SmartEnergyAppState extends State<SmartEnergyApp> {
+  bool _showSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (mounted) setState(() => _showSplash = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,10 +59,10 @@ class SmartEnergyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(
-          create: (_) => AuthProvider(checkSetup: autoConnect),
+          create: (_) => AuthProvider(checkSetup: widget.autoConnect),
         ),
         ChangeNotifierProvider(
-          create: (_) => EnergyProvider(autoConnect: autoConnect),
+          create: (_) => EnergyProvider(autoConnect: widget.autoConnect),
         ),
       ],
       child: Consumer<ThemeProvider>(
@@ -57,21 +73,21 @@ class SmartEnergyApp extends StatelessWidget {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: themeProvider.themeMode,
-            home: Consumer<AuthProvider>(
-              builder: (context, authProvider, _) {
-                if (authProvider.isLoading) {
-                  return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (authProvider.needsSetup) {
-                  return const SetupScreen();
-                }
-                return authProvider.isAuthenticated
-                    ? const MainNavigation()
-                    : const LoginScreen();
-              },
-            ),
+            home: _showSplash
+                ? const SplashScreen()
+                : Consumer<AuthProvider>(
+                    builder: (context, authProvider, _) {
+                      if (authProvider.isLoading) {
+                        return const SplashScreen();
+                      }
+                      if (authProvider.needsSetup) {
+                        return const SetupScreen();
+                      }
+                      return authProvider.isAuthenticated
+                          ? const MainNavigation()
+                          : const LoginScreen();
+                    },
+                  ),
           );
         },
       ),

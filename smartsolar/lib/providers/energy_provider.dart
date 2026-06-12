@@ -257,7 +257,7 @@ class EnergyProvider extends ChangeNotifier {
       _currentData = _currentData!.copyWith(
         wapdaAutoMode: automatic,
         wapdaRelayState: automatic
-            ? _currentData!.wapdaAvailable
+            ? (_currentData!.isDayTime ? false : _currentData!.wapdaAvailable)
             : _currentData!.wapdaRelayState,
       );
     } else if (type == 'HEAVY_LOAD_MODE' && _currentData != null) {
@@ -265,7 +265,7 @@ class EnergyProvider extends ChangeNotifier {
       _currentData = _currentData!.copyWith(
         heavyLoadAutoMode: automatic,
         heavyLoadState: automatic
-            ? (_currentData!.isDayTime || _currentData!.wapdaRelayState)
+            ? (_currentData!.isDayTime ? true : _currentData!.wapdaAvailable)
             : _currentData!.heavyLoadState,
       );
     } else if (type == 'USER_MODE') {

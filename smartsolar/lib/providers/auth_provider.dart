@@ -72,7 +72,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _user = await _authService.signup(name, email, productId, password);
+      await _authService.signup(name, email, productId, password);
       _needsSetup = false;
       _isLoading = false;
       notifyListeners();

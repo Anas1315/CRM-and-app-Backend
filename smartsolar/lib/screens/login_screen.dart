@@ -14,79 +14,36 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
 
+  late AnimationController _logoAnimController;
+
+  @override
+  void initState() {
+    super.initState();
+    _logoAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
   @override
   void dispose() {
+    _logoAnimController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _showServerConfigDialog(BuildContext context) {
-    final controller = TextEditingController(text: Constants.baseUrl);
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Backend Server URL'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter the backend API server URL (IP address & port) of your host machine.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  hintText: 'http://192.168.100.68:5000',
-                  border: OutlineInputBorder(),
-                  labelText: 'Server IP / URL',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final url = controller.text.trim();
-                if (url.isNotEmpty) {
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString('api_base_url', url);
-                  Constants.setDynamicBaseUrl(url);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Server URL updated to: ${Constants.baseUrl}'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
+      _logoAnimController.repeat();
+      
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final success = await authProvider.login(
         _emailController.text.trim(),
@@ -94,7 +51,26 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
+      _logoAnimController.animateTo(1, duration: const Duration(milliseconds: 500), curve: Curves.easeOut);
+      
       if (!success) {
+        String errorMsg = (authProvider.error ?? '').toLowerCase();
+        String displayTitle = 'Login Failed';
+        String displayMsg = 'An unknown error occurred.';
+        
+        if (errorMsg.contains('socket') || errorMsg.contains('timeout') || errorMsg.contains('network') || errorMsg.contains('connection')) {
+          displayTitle = 'No Internet Connection';
+          displayMsg = 'Please check your internet connection and try again.';
+        } else if (errorMsg.contains('not found') || errorMsg.contains('user not')) {
+          displayTitle = 'Email Not Found';
+          displayMsg = 'No account exists with this email address. Please sign up first.';
+        } else if (errorMsg.contains('password') || errorMsg.contains('incorrect') || errorMsg.contains('credentials')) {
+          displayTitle = 'Incorrect Password';
+          displayMsg = 'The password you entered is incorrect. Please try again.';
+        } else {
+          displayMsg = authProvider.error ?? 'Wrong email or password';
+        }
+
         await showDialog<void>(
           context: context,
           builder: (context) => AlertDialog(
@@ -103,8 +79,8 @@ class _LoginScreenState extends State<LoginScreen> {
               color: AppTheme.error,
               size: 42,
             ),
-            title: const Text('Login Failed'),
-            content: Text(authProvider.error ?? 'Wrong email or password'),
+            title: Text(displayTitle),
+            content: Text(displayMsg),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -129,13 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.dns_outlined, color: titleColor),
-            tooltip: 'Configure Backend Server IP',
-            onPressed: () => _showServerConfigDialog(context),
-          ),
-        ],
       ),
       body: DecoratedBox(
         decoration: BoxDecoration(
@@ -165,33 +134,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const SizedBox(height: 60),
                   Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.white.withValues(alpha: 0.88),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                                (isDark ? Colors.black : AppTheme.primaryDark)
-                                    .withValues(alpha: isDark ? 0.34 : 0.14),
-                            blurRadius: 30,
-                            offset: const Offset(0, 16),
-                          ),
-                          if (!isDark)
-                            BoxShadow(
-                              color: AppTheme.sunGlow.withValues(alpha: 0.18),
-                              blurRadius: 24,
-                              offset: const Offset(-8, -8),
-                            ),
-                        ],
-                      ),
-                      child: Image.asset(
-                        'assets/icon/logo.png',
-                        height: 80,
-                        width: 80,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      height: isLoading ? 140 : 120,
+                      width: isLoading ? 140 : 120,
+                      child: RotationTransition(
+                        turns: _logoAnimController,
+                        child: Image.asset(
+                          'assets/icon.png',
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   ),
